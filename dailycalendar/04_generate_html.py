@@ -285,6 +285,104 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
   padding-top: 0.4mm;
 }
 
+/* ────────────────────────── COVER PAGE ───────────────────────────────── */
+.cover {
+  background: #1a3a5c;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4mm;
+}
+.cover-logo {
+  width: 48mm;
+  height: auto;
+  filter: brightness(0) invert(1);
+  opacity: 0.95;
+}
+.cover-title {
+  color: #fff;
+  font-size: 13pt;
+  font-weight: 900;
+  text-align: center;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+}
+.cover-year {
+  color: #a8c8e8;
+  font-size: 8pt;
+  font-weight: 400;
+  text-align: center;
+  letter-spacing: 0.08em;
+}
+
+/* ────────────────────────── EMPTY PAGE ───────────────────────────────── */
+.empty {
+  background: #fafcff;
+}
+
+/* ────────────────────────── INFO PAGE ────────────────────────────────── */
+.info-page {
+  padding: 3mm 3.5mm 2mm;
+  background: #fafcff;
+  display: flex;
+  flex-direction: column;
+}
+.info-page h2 {
+  font-size: 8.5pt;
+  font-weight: 900;
+  color: #1a3a5c;
+  border-bottom: 0.5mm solid #1a3a5c;
+  padding-bottom: 1mm;
+  margin-bottom: 2mm;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+.info-page h3 {
+  font-size: 6pt;
+  font-weight: bold;
+  color: #1a3a5c;
+  margin-top: 1.5mm;
+  margin-bottom: 0.5mm;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.info-page p {
+  font-size: 5.4pt;
+  line-height: 1.45;
+  color: #1a1a1a;
+  text-align: justify;
+  hyphens: auto;
+  margin-bottom: 1mm;
+}
+.info-page ul {
+  font-size: 5.4pt;
+  line-height: 1.5;
+  color: #1a1a1a;
+  padding-left: 3.5mm;
+  margin-bottom: 1mm;
+}
+.info-page ul li {
+  margin-bottom: 0.3mm;
+}
+.info-page .highlight-box {
+  background: #e8f0fb;
+  border-left: 0.8mm solid #1a3a5c;
+  padding: 1mm 1.5mm;
+  margin: 1.5mm 0;
+  font-size: 5.4pt;
+  color: #1a1a1a;
+  line-height: 1.45;
+}
+.info-page .web-link {
+  font-size: 5pt;
+  color: #2c5f8a;
+  text-align: center;
+  margin-top: auto;
+  padding-top: 1.5mm;
+  border-top: 0.2mm solid #c0cfe0;
+}
+
 /* ── Screen preview ── */
 @media screen {
   body { background: #3a3a3a; padding: 10px; }
@@ -405,6 +503,98 @@ def back_page(date_str: str, rem: dict) -> str:
     )
 
 
+def cover_page(logo_uri: str) -> str:
+    """Hard cover page: logo + title."""
+    logo_img = (
+        f'<img src="{logo_uri}" class="cover-logo" alt="Fengselsimamene">'
+        if logo_uri else ""
+    )
+    return (
+        '<div class="page cover">'
+        f"{logo_img}"
+        '<div class="cover-title">Bønnetidskalender</div>'
+        '<div class="cover-year">2027</div>'
+        "</div>"
+    )
+
+
+def empty_page() -> str:
+    """A completely blank page (back of cover, back of info pages)."""
+    return '<div class="page empty"></div>'
+
+
+def org_info_page() -> str:
+    """Page about the Fengselsimamene organisation."""
+    return (
+        '<div class="page info-page">'
+        "<h2>Om Fengselsimamene</h2>"
+
+        "<p>Fengselsimamene er en frivillig norsk organisasjon som arbeider for å "
+        "gi deg som er innsatt muligheten til åndelig veiledning, bønn og refleksjon. "
+        "Vi er her for deg – ikke som dommere, men som brødre i tro og som støttespillere "
+        "på din vei.</p>"
+
+        "<h3>Hva gjør vi?</h3>"
+        "<ul>"
+        "<li>Holder fredagsbønn og eid-bønn i norske fengsler</li>"
+        "<li>Tilbyr personlige samtaler og sjelesorg i fortrolighet</li>"
+        "<li>Skaffer islamsk litteratur og materiell til innsatte</li>"
+        "<li>Jobber for at du skal ha lik tilgang på religiøs veiledning</li>"
+        "</ul>"
+
+        '<div class="highlight-box">'
+        "Over 50&#160;% av innsatte i Oslo fengsel har muslimsk bakgrunn – likevel "
+        "finnes det ingen imam i fast stilling. Dette er en ubalanse vi kjemper aktivt for å endre."
+        "</div>"
+
+        "<h3>Vår visjon</h3>"
+        "<p>Vi tror at tro, håp og fellesskap er blant de sterkeste kreftene for forandring. "
+        "Mange av oss som jobber i Fengselsimamene har sett med egne øyne hvordan troen "
+        "kan gi et menneske ny retning og ny styrke. Det er den forandringen vi ønsker "
+        "å være en del av – for deg.</p>"
+
+        '<div class="web-link">fengselsimamene.no</div>'
+        "</div>"
+    )
+
+
+def calendar_info_page() -> str:
+    """Page explaining how to use the prayer calendar."""
+    return (
+        '<div class="page info-page">'
+        "<h2>Om denne kalenderen</h2>"
+
+        "<p>Denne bønnetidskalenderen er laget spesielt for deg som er innsatt i et norsk "
+        "fengsel. For hvert eneste av årets 365 dager finner du to sider: én med bønnetider "
+        "og én med en islamsk refleksjon.</p>"
+
+        "<h3>Forsiden – bønnetider</h3>"
+        "<ul>"
+        "<li><b>28 norske fengsler og byer</b> – Fajr, Soloppgang, Zuhr, Asr, Maghrib og Isha</li>"
+        "<li>Gregoriansk dato, ukedag og <b>hijri-dato</b> (islamsk kalender)</li>"
+        "<li>Et vers fra Koranen eller et hadith øverst på siden</li>"
+        "</ul>"
+
+        "<h3>Baksiden – daglig refleksjon</h3>"
+        "<ul>"
+        "<li>Et islamsk tema med tekst på norsk</li>"
+        "<li>En <b>dua</b> (bønn) på arabisk</li>"
+        "<li>Latinsk <b>translitterasjon</b> – slik at du kan lese bønnen høyt, "
+        "selv uten arabiskkunnskap</li>"
+        "</ul>"
+
+        '<div class="highlight-box">'
+        "Bønnetidene er beregnet etter Den islamske verdensliguens metode (MWL), "
+        "tilpasset norske breddegrader med midnatt-metoden for høye breddegrader "
+        "(nord for 48°N)."
+        "</div>"
+
+        "<p>Måtte denne kalenderen være et daglig ankerpunkt for deg – en påminnelse "
+        "om at Allah er nær, uansett hvor du er.</p>"
+        "</div>"
+    )
+
+
 def build_html(pages_html: list[str], logo_uri: str = "") -> str:
     body = "\n".join(pages_html)
     css  = CSS.replace("__LOGO_URI__", logo_uri)
@@ -459,6 +649,15 @@ def main():
         return rem_no.get(date_str) or rem_tr.get(date_str, {})
 
     pages: list[str] = []
+
+    # ── Front matter (6 pages before the calendar) ──
+    pages.append(cover_page(logo_uri))       # p1: hard cover
+    pages.append(empty_page())               # p2: back of cover (blank)
+    pages.append(org_info_page())            # p3: about Fengselsimamene
+    pages.append(empty_page())               # p4: back of org page (blank)
+    pages.append(calendar_info_page())       # p5: about this calendar
+    pages.append(empty_page())               # p6: back of calendar info (blank)
+
     sorted_dates = sorted(prayer_data.keys())
 
     for date_str in sorted_dates:
