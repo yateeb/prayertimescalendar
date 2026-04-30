@@ -397,23 +397,30 @@ def main():
     prayer_data: dict = json.loads(PRAYER.read_text(encoding="utf-8"))
     print(f"Prayer data: {len(prayer_data)} days")
 
-    # Prefer Norwegian translations; fall back to Turkish
+    # Load both sources; Norwegian preferred per day, Turkish as fallback
+    rem_tr: dict = {}
+    rem_no: dict = {}
+    if REM_TR.exists():
+        rem_tr = json.loads(REM_TR.read_text(encoding="utf-8"))
     if REM_NO.exists():
-        rem_data: dict = json.loads(REM_NO.read_text(encoding="utf-8"))
-        print(f"Reminders: {len(rem_data)} Norwegian entries")
-    elif REM_TR.exists():
-        rem_data = json.loads(REM_TR.read_text(encoding="utf-8"))
-        print(f"WARNING: Norwegian translation not found; using Turkish text.")
+        rem_no = json.loads(REM_NO.read_text(encoding="utf-8"))
+        print(f"Reminders: {len(rem_no)} Norwegian + {len(rem_tr) - len(rem_no)} Turkish fallback entries")
+    elif rem_tr:
+        print(f"Reminders: {len(rem_tr)} Turkish entries (translation not yet run)")
     else:
         print(f"ERROR: No reminder data found.\nRun 01_extract_reminders.py first.")
         raise SystemExit(1)
+
+    def get_reminder(date_str: str) -> dict:
+        """Return Norwegian if translated, else Turkish fallback."""
+        return rem_no.get(date_str) or rem_tr.get(date_str, {})
 
     pages: list[str] = []
     sorted_dates = sorted(prayer_data.keys())
 
     for date_str in sorted_dates:
         meta = prayer_data[date_str]
-        rem  = rem_data.get(date_str, {})
+        rem  = get_reminder(date_str)
         pages.append(front_page(date_str, meta, rem))
         pages.append(back_page(date_str, rem))
 
