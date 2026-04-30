@@ -30,16 +30,16 @@ REM_NO   = HERE / "data" / "reminders_no.json"
 REM_TR   = HERE / "data" / "reminders_tr.json"
 OUTPUT   = HERE / "output" / "kalender-2027-daglig.html"
 
-# City order (exactly as in the CSV; split 14 left / 14 right)
+# Cities in Norwegian alphabetical order (Æ, Ø, Å come after Z)
 CITY_LEFT = [
-    "Ullersmo", "Halden", "Bergen", "Froland", "Ringerike", "Trondheim",
-    "Åna", "Bastøy", "Ila", "Eidsberg", "Mandal", "Bjørgvin",
-    "Trøgstad", "Kongsvinger",
+    "Badsø", "Bastøy", "Bergen", "Bjørgvin", "Bodø", "Eidsberg",
+    "Froland", "Halden", "Hamar", "Hustad", "Ila", "Kongsvinger",
+    "Kroksrud", "Mandal",
 ]
 CITY_RIGHT = [
-    "Hamar", "Skien", "Stavanger", "Sem", "Hustad", "Kroksrud",
-    "Tromsø", "Bodø", "Tønsberg", "Badsø", "Sarpsborg", "Vik",
-    "Ålesund", "Sandeid",
+    "Ringerike", "Sandeid", "Sarpsborg", "Sem", "Skien", "Stavanger",
+    "Tromsø", "Trondheim", "Trøgstad", "Tønsberg", "Ullersmo", "Vik",
+    "Ålesund", "Åna",
 ]
 
 PRAYER_KEYS  = ["Fajr", "Sunrise", "Dhuhr", "Asr", "Maghrib", "Isha"]
@@ -123,10 +123,6 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
 .date-hijri {
   font-size: 5pt;
   color: #555;
-}
-.date-rumi {
-  font-size: 4.5pt;
-  color: #777;
 }
 .date-doy {
   font-size: 4.5pt;
@@ -297,16 +293,12 @@ def prayer_table(cities: list[str], city_data: dict) -> str:
 
 def front_page(date_str: str, meta: dict, rem: dict) -> str:
     hijri = meta.get("hijri", {})
-    rumi  = meta.get("rumi",  {})
     ayet  = rem.get("ayet_hadis", "")
     olay  = rem.get("olay", "")
     cities_data = meta.get("cities", {})
 
     hijri_str = (
         f"{hijri.get('day', '')} {hijri.get('month', '')} {hijri.get('year', '')} H"
-    )
-    rumi_str = (
-        f"{rumi.get('day', '')} {rumi.get('month_name', '')} {rumi.get('year', '')} R"
     )
     doy       = meta.get("day_of_year", "")
     days_left = meta.get("days_left", "")
@@ -322,7 +314,6 @@ def front_page(date_str: str, meta: dict, rem: dict) -> str:
     <div class="date-wd">{esc(meta.get('weekday', ''))}</div>
     <div class="date-mth">{esc(meta.get('month', ''))} {meta.get('year', '')}</div>
     <div class="date-hijri">{esc(hijri_str)}</div>
-    <div class="date-rumi">{esc(rumi_str)}</div>
     <div class="date-doy">Dag {doy} &nbsp;·&nbsp; {days_left} igjen</div>
   </div>
   <div class="col-olay">
