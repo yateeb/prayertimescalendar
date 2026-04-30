@@ -232,11 +232,12 @@ def pass1_replace(no_data: dict, done: set, theme_iter) -> int:
 
 PASS2_SYSTEM = (
     "Du er en islamsk lærd. Gitt en norsk oversettelse av en islamsk bønn/dua, "
-    "identifiser den originale arabiske bønnen og svar KUN med et JSON-objekt med:"
-    "\n  arabic:     original arabisk tekst (arabisk skrift)"
-    "\n  translit:   latinsk translitterasjon av den arabiske teksten (for memorering)"
+    "identifiser den originale arabiske bønnen og gi kun latinsk translitterasjon "
+    "av den arabiske originalteksten (for memorering). "
+    "Svar KUN med et JSON-objekt med ett felt: "
+    "\n  translit: latinsk translitterasjon av den arabiske teksten"
     "\nHvis du ikke kan identifisere en spesifikk arabisk bønn, lag en passende "
-    "generisk arabisk suplikasjon basert på innholdet i den norske teksten. "
+    "generisk arabisk suplikasjon basert på innholdet og translitérer den. "
     "Svar KUN med JSON – ingen forklaring."
 )
 
@@ -271,8 +272,9 @@ def pass2_translit(no_data: dict, done: set) -> int:
             print(f" BAD JSON: {raw[:60]}")
             continue
 
-        entry["dua_arabic"]   = obj.get("arabic", "")
         entry["dua_translit"] = obj.get("translit", "")
+        # Remove arabic field if it was previously written
+        entry.pop("dua_arabic", None)
         done.add(date_str)
         PROG2.write_text(json.dumps(sorted(done), ensure_ascii=False, indent=2), encoding="utf-8")
         NO_FILE.write_text(json.dumps(no_data, ensure_ascii=False, indent=2), encoding="utf-8")

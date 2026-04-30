@@ -275,15 +275,6 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
   line-height: 1.35;
   margin-top: 0.3mm;
 }
-.dua-arabic {
-  font-size: 7pt;
-  color: #1a3a5c;
-  text-align: right;
-  direction: rtl;
-  line-height: 1.6;
-  margin-top: 1mm;
-  font-family: 'Traditional Arabic', 'Scheherazade New', serif;
-}
 .dua-translit {
   font-size: 4.8pt;
   color: #2c5f8a;
@@ -381,21 +372,16 @@ def front_page(date_str: str, meta: dict, rem: dict) -> str:
 
 
 def back_page(date_str: str, rem: dict) -> str:
-    konu        = rem.get("konu",  "")
-    metin       = rem.get("metin", "")
-    dua         = rem.get("dua",   "")
-    dua_arabic  = rem.get("dua_arabic",  "")
-    dua_translit= rem.get("dua_translit","")
+    konu         = rem.get("konu",  "")
+    metin        = rem.get("metin", "")
+    dua          = rem.get("dua",   "")
+    dua_translit = rem.get("dua_translit", "")
 
     # Convert newlines in metin to <br> tags for display
     metin_html = "<br>".join(esc(line) for line in metin.splitlines()) if metin else ""
 
     dua_block = ""
     if dua:
-        arabic_html = (
-            f'<div class="dua-arabic">{esc(dua_arabic)}</div>'
-            if dua_arabic else ""
-        )
         translit_html = (
             f'<div class="dua-translit">{esc(dua_translit)}</div>'
             if dua_translit else ""
@@ -404,7 +390,6 @@ def back_page(date_str: str, rem: dict) -> str:
             '<div class="back-dua">'
             '<div class="dua-label">Dua</div>'
             f'<div class="dua-text">{esc(dua)}</div>'
-            f'{arabic_html}'
             f'{translit_html}'
             "</div>"
         )
