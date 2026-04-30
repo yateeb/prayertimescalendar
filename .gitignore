@@ -1,0 +1,10 @@
+# Environment / secrets
+dailycalendar/.env
+
+# Generated output (large files)
+dailycalendar/output/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo

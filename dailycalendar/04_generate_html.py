@@ -1,0 +1,428 @@
+#!/usr/bin/env python3
+"""
+04_generate_html.py
+-------------------
+Generates a print-ready HTML daily calendar for 2027.
+Page size: 127 mm × 102 mm (landscape-ish).
+
+Each physical day = 2 HTML pages in the output:
+  Front – header (Ayet/Hadis | Date | Olay) + 28-city prayer times table
+  Back  – Islamic reminder (Konu + Metin + Dua) – translated to Norwegian
+
+Page order in HTML: front₁, back₁, front₂, back₂ … (duplex-friendly)
+
+Reads:
+  dailycalendar/data/prayer_times_2027.json
+  dailycalendar/data/reminders_no.json    (preferred)
+  dailycalendar/data/reminders_tr.json    (fallback if translation missing)
+
+Output:
+  dailycalendar/output/kalender-2027-daglig.html
+"""
+
+import json
+from html import escape as esc
+from pathlib import Path
+
+HERE     = Path(__file__).resolve().parent
+PRAYER   = HERE / "data" / "prayer_times_2027.json"
+REM_NO   = HERE / "data" / "reminders_no.json"
+REM_TR   = HERE / "data" / "reminders_tr.json"
+OUTPUT   = HERE / "output" / "kalender-2027-daglig.html"
+
+# City order (exactly as in the CSV; split 14 left / 14 right)
+CITY_LEFT = [
+    "Ullersmo", "Halden", "Bergen", "Froland", "Ringerike", "Trondheim",
+    "Åna", "Bastøy", "Ila", "Eidsberg", "Mandal", "Bjørgvin",
+    "Trøgstad", "Kongsvinger",
+]
+CITY_RIGHT = [
+    "Hamar", "Skien", "Stavanger", "Sem", "Hustad", "Kroksrud",
+    "Tromsø", "Bodø", "Tønsberg", "Badsø", "Sarpsborg", "Vik",
+    "Ålesund", "Sandeid",
+]
+
+PRAYER_KEYS  = ["Fajr", "Sunrise", "Dhuhr", "Asr", "Maghrib", "Isha"]
+PRAYER_HEADS = ["Fajr", "Sol↑", "Zuhr", "Asr", "Maghr", "Isha"]
+
+# ── CSS ──────────────────────────────────────────────────────────────────────
+CSS = """
+@page { size: 127mm 102mm; margin: 1.5mm; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
+
+/* ── shared page shell ── */
+.page {
+  width: 124mm;
+  height: 99mm;
+  overflow: hidden;
+  page-break-after: always;
+  position: relative;
+}
+.page:last-child { page-break-after: auto; }
+
+/* ────────────────────────── FRONT PAGE ───────────────────────────────── */
+
+.front .header {
+  display: flex;
+  height: 18mm;
+  border-bottom: 0.35mm solid #1a3a5c;
+  padding-bottom: 0.8mm;
+  margin-bottom: 0.8mm;
+  gap: 1mm;
+}
+
+/* Left column – Ayet / Hadis */
+.col-ayet {
+  width: 36mm;
+  padding: 0.5mm 1mm 0.5mm 0;
+  border-right: 0.2mm solid #c0cfe0;
+  overflow: hidden;
+}
+.col-ayet h4 {
+  font-size: 4.5pt;
+  font-weight: bold;
+  color: #1a3a5c;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 0.5mm;
+}
+.col-ayet p {
+  font-size: 5pt;
+  font-style: italic;
+  color: #333;
+  line-height: 1.35;
+}
+
+/* Centre column – Date block */
+.col-date {
+  flex: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1mm;
+}
+.date-num {
+  font-size: 26pt;
+  font-weight: 900;
+  color: #1a3a5c;
+  line-height: 1;
+}
+.date-wd {
+  font-size: 7pt;
+  font-weight: bold;
+  color: #222;
+  letter-spacing: 0.03em;
+}
+.date-mth {
+  font-size: 6.5pt;
+  color: #333;
+}
+.date-hijri {
+  font-size: 5pt;
+  color: #555;
+}
+.date-rumi {
+  font-size: 4.5pt;
+  color: #777;
+}
+.date-doy {
+  font-size: 4.5pt;
+  color: #888;
+  margin-top: 0.3mm;
+}
+
+/* Right column – Olay (historical events) */
+.col-olay {
+  width: 36mm;
+  padding: 0.5mm 0 0.5mm 1mm;
+  border-left: 0.2mm solid #c0cfe0;
+  overflow: hidden;
+}
+.col-olay h4 {
+  font-size: 4.5pt;
+  font-weight: bold;
+  color: #1a3a5c;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 0.5mm;
+}
+.col-olay p {
+  font-size: 5pt;
+  color: #333;
+  line-height: 1.35;
+}
+
+/* ── Prayer-times section ── */
+.prayer-area {
+  display: flex;
+  gap: 1mm;
+  height: 79mm;
+}
+.prayer-wrap {
+  flex: 1;
+  overflow: hidden;
+}
+.pt {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 5pt;
+}
+.pt thead tr th {
+  background: #1a3a5c;
+  color: #fff;
+  padding: 0.5mm 0.3mm;
+  text-align: center;
+  font-size: 4.5pt;
+  font-weight: bold;
+  white-space: nowrap;
+}
+.pt thead tr th.ch {
+  text-align: left;
+  padding-left: 0.8mm;
+}
+.pt tbody tr td {
+  padding: 0.22mm 0.3mm;
+  text-align: center;
+  border-bottom: 0.15mm solid #d8e8f4;
+  color: #1a4060;
+  font-size: 5pt;
+}
+.pt tbody tr td.city {
+  text-align: left;
+  font-weight: 600;
+  color: #1a3a5c;
+  padding-left: 0.8mm;
+  white-space: nowrap;
+  overflow: hidden;
+  max-width: 16mm;
+}
+.pt tbody tr:nth-child(even) td { background: #e6f0f9; }
+.pt tbody tr:nth-child(odd)  td { background: #f4f9fd; }
+
+/* ────────────────────────── BACK PAGE ────────────────────────────────── */
+
+.back {
+  padding: 2mm 2.5mm 1.5mm;
+  height: 99mm;
+  display: flex;
+  flex-direction: column;
+  background: #fafcff;
+}
+.back-konu {
+  font-size: 7.5pt;
+  font-weight: bold;
+  color: #1a3a5c;
+  text-align: center;
+  border-bottom: 0.5mm solid #1a3a5c;
+  padding-bottom: 1mm;
+  margin-bottom: 1.5mm;
+  line-height: 1.25;
+}
+.back-metin {
+  font-size: 5.5pt;
+  line-height: 1.4;
+  text-align: justify;
+  color: #1a1a1a;
+  flex: 1;
+  overflow: hidden;
+  hyphens: auto;
+}
+.back-dua {
+  margin-top: 1.5mm;
+  padding: 1mm 1.5mm;
+  background: #e8f0fb;
+  border: 0.3mm solid #2c5f8a;
+  border-radius: 0.8mm;
+  flex-shrink: 0;
+}
+.dua-label {
+  font-size: 4.5pt;
+  font-weight: bold;
+  color: #1a3a5c;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.dua-text {
+  font-size: 5pt;
+  font-style: italic;
+  color: #1a3a5c;
+  line-height: 1.35;
+  margin-top: 0.3mm;
+}
+
+/* ── Screen preview ── */
+@media screen {
+  body { background: #3a3a3a; padding: 10px; }
+  .page {
+    background: #fff;
+    margin: 6px auto;
+    box-shadow: 0 2px 10px rgba(0,0,0,.45);
+  }
+}
+"""
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+def _p(text: str, cls: str = "") -> str:
+    """Wrap escaped text in <p>."""
+    cls_attr = f' class="{cls}"' if cls else ""
+    return f"<p{cls_attr}>{esc(text)}</p>"
+
+
+def prayer_table(cities: list[str], city_data: dict) -> str:
+    """Build one half-page prayer-time <table>."""
+    heads = "".join(
+        f'<th class="ch">Sted</th>' +
+        "".join(f"<th>{h}</th>" for h in PRAYER_HEADS)
+    )
+    rows = []
+    for city in cities:
+        times = city_data.get(city, {})
+        cells = "".join(
+            f"<td>{esc(times.get(k, '—'))}</td>" for k in PRAYER_KEYS
+        )
+        rows.append(
+            f'<tr><td class="city">{esc(city)}</td>{cells}</tr>'
+        )
+    return (
+        '<table class="pt">'
+        f"<thead><tr>{heads}</tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody>"
+        "</table>"
+    )
+
+
+def front_page(date_str: str, meta: dict, rem: dict) -> str:
+    hijri = meta.get("hijri", {})
+    rumi  = meta.get("rumi",  {})
+    ayet  = rem.get("ayet_hadis", "")
+    olay  = rem.get("olay", "")
+    cities_data = meta.get("cities", {})
+
+    hijri_str = (
+        f"{hijri.get('day', '')} {hijri.get('month', '')} {hijri.get('year', '')} H"
+    )
+    rumi_str = (
+        f"{rumi.get('day', '')} {rumi.get('month_name', '')} {rumi.get('year', '')} R"
+    )
+    doy       = meta.get("day_of_year", "")
+    days_left = meta.get("days_left", "")
+
+    header = f"""
+<div class="header">
+  <div class="col-ayet">
+    <h4>Ayet / Hadis</h4>
+    <p>{esc(ayet)}</p>
+  </div>
+  <div class="col-date">
+    <div class="date-num">{meta.get('day', ''):02d}</div>
+    <div class="date-wd">{esc(meta.get('weekday', ''))}</div>
+    <div class="date-mth">{esc(meta.get('month', ''))} {meta.get('year', '')}</div>
+    <div class="date-hijri">{esc(hijri_str)}</div>
+    <div class="date-rumi">{esc(rumi_str)}</div>
+    <div class="date-doy">Dag {doy} &nbsp;·&nbsp; {days_left} igjen</div>
+  </div>
+  <div class="col-olay">
+    <h4>Historisk</h4>
+    <p>{esc(olay)}</p>
+  </div>
+</div>"""
+
+    prayers = f"""
+<div class="prayer-area">
+  <div class="prayer-wrap">{prayer_table(CITY_LEFT,  cities_data)}</div>
+  <div class="prayer-wrap">{prayer_table(CITY_RIGHT, cities_data)}</div>
+</div>"""
+
+    return (
+        f'<div class="page front" data-date="{date_str}">'
+        f"{header}{prayers}"
+        f"</div>"
+    )
+
+
+def back_page(date_str: str, rem: dict) -> str:
+    konu  = rem.get("konu",  "")
+    metin = rem.get("metin", "")
+    dua   = rem.get("dua",   "")
+
+    # Convert newlines in metin to <br> tags for display
+    metin_html = "<br>".join(esc(line) for line in metin.splitlines()) if metin else ""
+
+    dua_block = ""
+    if dua:
+        dua_block = (
+            '<div class="back-dua">'
+            '<div class="dua-label">Dua</div>'
+            f'<div class="dua-text">{esc(dua)}</div>'
+            "</div>"
+        )
+
+    return (
+        f'<div class="page back" data-date="{date_str}">'
+        f'<div class="back">'
+        f'<div class="back-konu">{esc(konu)}</div>'
+        f'<div class="back-metin">{metin_html}</div>'
+        f"{dua_block}"
+        f"</div>"
+        f"</div>"
+    )
+
+
+def build_html(pages_html: list[str]) -> str:
+    body = "\n".join(pages_html)
+    return (
+        "<!DOCTYPE html>\n"
+        '<html lang="no">\n'
+        "<head>\n"
+        '<meta charset="UTF-8">\n'
+        "<title>Bønnetidskalender 2027 – Daglig</title>\n"
+        f"<style>{CSS}</style>\n"
+        "</head>\n"
+        f"<body>\n{body}\n</body>\n"
+        "</html>\n"
+    )
+
+
+def main():
+    OUTPUT.parent.mkdir(exist_ok=True)
+
+    if not PRAYER.exists():
+        print(f"ERROR: {PRAYER} not found.\nRun 02_prayer_times.py first.")
+        raise SystemExit(1)
+
+    prayer_data: dict = json.loads(PRAYER.read_text(encoding="utf-8"))
+    print(f"Prayer data: {len(prayer_data)} days")
+
+    # Prefer Norwegian translations; fall back to Turkish
+    if REM_NO.exists():
+        rem_data: dict = json.loads(REM_NO.read_text(encoding="utf-8"))
+        print(f"Reminders: {len(rem_data)} Norwegian entries")
+    elif REM_TR.exists():
+        rem_data = json.loads(REM_TR.read_text(encoding="utf-8"))
+        print(f"WARNING: Norwegian translation not found; using Turkish text.")
+    else:
+        print(f"ERROR: No reminder data found.\nRun 01_extract_reminders.py first.")
+        raise SystemExit(1)
+
+    pages: list[str] = []
+    sorted_dates = sorted(prayer_data.keys())
+
+    for date_str in sorted_dates:
+        meta = prayer_data[date_str]
+        rem  = rem_data.get(date_str, {})
+        pages.append(front_page(date_str, meta, rem))
+        pages.append(back_page(date_str, rem))
+
+    html = build_html(pages)
+    OUTPUT.write_text(html, encoding="utf-8")
+
+    size_kb = OUTPUT.stat().st_size // 1024
+    print(f"Generated {len(sorted_dates)} days ({len(pages)} pages) → {OUTPUT}  [{size_kb} KB]")
+
+
+if __name__ == "__main__":
+    main()
