@@ -20,11 +20,13 @@ Output:
   dailycalendar/output/kalender-2027-daglig.html
 """
 
+import base64
 import json
 from html import escape as esc
 from pathlib import Path
 
 HERE     = Path(__file__).resolve().parent
+LOGO     = HERE.parent / "logo.png"
 PRAYER   = HERE / "data" / "prayer_times_2027.json"
 REM_NO   = HERE / "data" / "reminders_no.json"
 REM_TR   = HERE / "data" / "reminders_tr.json"
@@ -63,9 +65,16 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
 
 /* ────────────────────────── FRONT PAGE ───────────────────────────────── */
 
+/* Fill the page height: header shrinks to content, prayer area takes the rest */
+.front {
+  display: flex;
+  flex-direction: column;
+  padding: 1mm 1.5mm 0.5mm;
+}
+
 .front .header {
   display: flex;
-  height: 18mm;
+  flex-shrink: 0;
   border-bottom: 0.35mm solid #1a3a5c;
   padding-bottom: 0.8mm;
   margin-bottom: 0.8mm;
@@ -155,23 +164,42 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
 .prayer-area {
   display: flex;
   gap: 1mm;
-  height: 79mm;
+  flex: 1;          /* fill all remaining height */
+  position: relative;
+}
+/* Logo watermark sits centred behind both tables */
+.prayer-area::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 62mm;
+  height: 62mm;
+  background: url("__LOGO_URI__") no-repeat center center;
+  background-size: contain;
+  opacity: 0.09;
+  pointer-events: none;
+  z-index: 0;
 }
 .prayer-wrap {
   flex: 1;
   overflow: hidden;
+  position: relative;
+  z-index: 1;
 }
 .pt {
   border-collapse: collapse;
   width: 100%;
-  font-size: 5pt;
+  height: 100%;   /* stretch to fill prayer-wrap */
+  font-size: 6pt;
 }
 .pt thead tr th {
   background: #1a3a5c;
   color: #fff;
-  padding: 0.5mm 0.3mm;
+  padding: 0.7mm 0.3mm;
   text-align: center;
-  font-size: 4.5pt;
+  font-size: 5pt;
   font-weight: bold;
   white-space: nowrap;
 }
@@ -180,11 +208,11 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
   padding-left: 0.8mm;
 }
 .pt tbody tr td {
-  padding: 0.22mm 0.3mm;
+  padding: 0.48mm 0.3mm;
   text-align: center;
   border-bottom: 0.15mm solid #d8e8f4;
   color: #1a4060;
-  font-size: 5pt;
+  font-size: 6pt;
 }
 .pt tbody tr td.city {
   text-align: left;
@@ -193,7 +221,7 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
   padding-left: 0.8mm;
   white-space: nowrap;
   overflow: hidden;
-  max-width: 16mm;
+  max-width: 18mm;
 }
 .pt tbody tr:nth-child(even) td { background: #e6f0f9; }
 .pt tbody tr:nth-child(odd)  td { background: #f4f9fd; }
@@ -363,15 +391,16 @@ def back_page(date_str: str, rem: dict) -> str:
     )
 
 
-def build_html(pages_html: list[str]) -> str:
+def build_html(pages_html: list[str], logo_uri: str = "") -> str:
     body = "\n".join(pages_html)
+    css  = CSS.replace("__LOGO_URI__", logo_uri)
     return (
         "<!DOCTYPE html>\n"
         '<html lang="no">\n'
         "<head>\n"
         '<meta charset="UTF-8">\n'
         "<title>Bønnetidskalender 2027 – Daglig</title>\n"
-        f"<style>{CSS}</style>\n"
+        f"<style>{css}</style>\n"
         "</head>\n"
         f"<body>\n{body}\n</body>\n"
         "</html>\n"
@@ -380,6 +409,15 @@ def build_html(pages_html: list[str]) -> str:
 
 def main():
     OUTPUT.parent.mkdir(exist_ok=True)
+
+    # Embed logo as base64 data URI for the watermark
+    logo_uri = ""
+    if LOGO.exists():
+        logo_b64 = base64.b64encode(LOGO.read_bytes()).decode()
+        logo_uri = f"data:image/png;base64,{logo_b64}"
+        print(f"Logo: {LOGO.name} ({len(logo_b64)//1024} KB base64)")
+    else:
+        print(f"Warning: logo not found at {LOGO}")
 
     if not PRAYER.exists():
         print(f"ERROR: {PRAYER} not found.\nRun 02_prayer_times.py first.")
@@ -415,7 +453,7 @@ def main():
         pages.append(front_page(date_str, meta, rem))
         pages.append(back_page(date_str, rem))
 
-    html = build_html(pages)
+    html = build_html(pages, logo_uri=logo_uri)
     OUTPUT.write_text(html, encoding="utf-8")
 
     size_kb = OUTPUT.stat().st_size // 1024
