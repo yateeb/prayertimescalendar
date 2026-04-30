@@ -224,12 +224,41 @@ def main():
         except requests.HTTPError as exc:
             consecutive_errors += 1
             status = exc.response.status_code if exc.response is not None else 0
-            print(f" HTTP {status}")
             wait = 30 if status == 429 else 10
-            print(f"  → waiting {wait}s before retry...", flush=True)
+            print(f" HTTP {status} – wait {wait}s, then retry 1-by-1")
             time.sleep(wait)
-            # Re-insert batch at front of remaining work by continuing (not consumed)
-            continue
+            # Retry each day individually
+            for item in batch:
+                d = item["date"]
+                if d in no_data:
+                    continue
+                print(f"    {d} ...", end="", flush=True)
+                for attempt in range(3):
+                    try:
+                        result = translate_batch([item], api_key)
+                        if result:
+                            r = result[0]
+                            no_data[d] = {
+                                "olay":       r.get("olay",       ""),
+                                "ayet_hadis": r.get("ayet_hadis", ""),
+                                "konu":       r.get("konu",       ""),
+                                "metin":      r.get("metin",      ""),
+                                "dua":        r.get("dua",        ""),
+                            }
+                            done += 1
+                            print(f" ✓")
+                            consecutive_errors = 0
+                            break
+                    except requests.HTTPError as he:
+                        s2 = he.response.status_code if he.response is not None else 0
+                        w2 = 30 if s2 == 429 else 10
+                        print(f" HTTP {s2}, wait {w2}s", end="", flush=True)
+                        time.sleep(w2)
+                    except Exception as e2:
+                        print(f" ✗ ({e2.__class__.__name__})", end="", flush=True)
+                        time.sleep(3)
+                else:
+                    print(f" SKIPPED after 3 attempts")
 
         except Exception as exc:
             consecutive_errors += 1
