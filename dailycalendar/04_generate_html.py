@@ -65,7 +65,7 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
 
 /* ────────────────────────── FRONT PAGE ───────────────────────────────── */
 
-/* Fill the page height: header shrinks to content, prayer area takes the rest */
+/* Make the front page a flex column so prayer area fills all leftover height */
 .front {
   display: flex;
   flex-direction: column;
@@ -162,23 +162,21 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
 
 /* ── Prayer-times section ── */
 .prayer-area {
+  flex: 1;                  /* grow to fill remaining page height */
   display: flex;
   gap: 0;
-  flex: 1;          /* fill all remaining height */
   position: relative;
 }
-/* Logo watermark sits centred behind both tables */
+/* Logo watermark centred behind both tables */
 .prayer-area::before {
   content: '';
   position: absolute;
-  top: 50%;
-  left: 50%;
+  top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  width: 62mm;
-  height: 62mm;
+  width: 65mm; height: 65mm;
   background: url("__LOGO_URI__") no-repeat center center;
   background-size: contain;
-  opacity: 0.09;
+  opacity: 0.10;
   pointer-events: none;
   z-index: 0;
 }
@@ -187,24 +185,20 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
   overflow: hidden;
   position: relative;
   z-index: 1;
-  background: white;   /* solid cover so logo only shows behind table rows */
 }
-.prayer-wrap:first-child {
-  border-right: 0.4mm solid #c0cfe0;
-  padding-right: 0.5mm;
-}
+.prayer-wrap:first-child { border-right: 0.3mm solid #c0cfe0; padding-right: 0.3mm; }
 .pt {
   border-collapse: collapse;
   width: 100%;
-  height: 100%;   /* stretch to fill prayer-wrap */
+  height: 100%;             /* stretch rows to fill the prayer-wrap */
   font-size: 6pt;
 }
 .pt thead tr th {
   background: #1a3a5c;
   color: #fff;
-  padding: 0.7mm 0.3mm;
+  padding: 0.8mm 0.3mm;
   text-align: center;
-  font-size: 5pt;
+  font-size: 5.5pt;
   font-weight: bold;
   white-space: nowrap;
 }
@@ -213,7 +207,7 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
   padding-left: 0.8mm;
 }
 .pt tbody tr td {
-  padding: 0.48mm 0.3mm;
+  padding: 0.5mm 0.3mm;
   text-align: center;
   border-bottom: 0.15mm solid #d8e8f4;
   color: #1a4060;
@@ -226,7 +220,7 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
   padding-left: 0.8mm;
   white-space: nowrap;
   overflow: hidden;
-  max-width: 18mm;
+  max-width: 16mm;
 }
 .pt tbody tr:nth-child(even) td { background: #e6f0f9; }
 .pt tbody tr:nth-child(odd)  td { background: #f4f9fd; }
@@ -415,7 +409,7 @@ def build_html(pages_html: list[str], logo_uri: str = "") -> str:
 def main():
     OUTPUT.parent.mkdir(exist_ok=True)
 
-    # Embed logo as base64 data URI for the watermark
+    # Embed logo as inline base64 so the watermark works when printing / offline
     logo_uri = ""
     if LOGO.exists():
         logo_b64 = base64.b64encode(LOGO.read_bytes()).decode()
