@@ -33,7 +33,8 @@ OUTPUT  = HERE / "data" / "reminders_no.json"
 ENV     = HERE / ".env"
 
 MODEL   = os.environ.get("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
-BATCH   = 3    # days per API call (balances cost vs. JSON reliability)
+BATCH   = 3    # days per first-pass API call
+RETRY_BATCH = 1  # retry failed batches one day at a time
 
 SYSTEM_PROMPT = """\
 You are a professional translator specializing in Islamic educational texts.
@@ -96,6 +97,7 @@ def translate_batch(batch: list[dict], api_key: str) -> list[dict]:
                 {"role": "user",   "content": user_prompt},
             ],
             "temperature": 0.2,
+            "max_tokens": 8192,
         },
         timeout=120,
     )
@@ -109,10 +111,57 @@ def translate_batch(batch: list[dict], api_key: str) -> list[dict]:
         content = parts[1]
         if content.startswith("json"):
             content = content[4:]
-        # Remove closing fence if present
         content = content.rsplit("```", 1)[0]
 
-    return json.loads(content.strip())
+    content = content.strip()
+
+    # Fix common truncation: unterminated string / missing closing brackets.
+    # Count unclosed quotes (odd = unterminated string value)
+    # Strategy: if parse fails, close any open string then close the array.
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        pass
+
+    # Attempt simple repair: truncate to last complete object
+    # Find last complete '}' at top-level depth
+    depth = 0
+    last_complete = -1
+    in_str = False
+    escape_next = False
+    for idx, ch in enumerate(content):
+        if escape_next:
+            escape_next = False
+            continue
+        if ch == "\\" and in_str:
+            escape_next = True
+            continue
+        if ch == '"':
+            in_str = not in_str
+            continue
+        if not in_str:
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    last_complete = idx
+
+    if last_complete > 0:
+        repaired = content[:last_complete + 1]
+        # Wrap in array if not already
+        stripped = repaired.strip()
+        if not stripped.startswith("["):
+            stripped = "[" + stripped + "]"
+        else:
+            # Close array
+            stripped = stripped.rstrip() + "]"
+        try:
+            return json.loads(stripped)
+        except json.JSONDecodeError:
+            pass
+
+    raise ValueError(f"Could not parse model response as JSON (len={len(content)})")
 
 
 def main():
@@ -148,7 +197,7 @@ def main():
 
     total   = len(pending)
     done    = 0
-    errors  = 0
+    consecutive_errors = 0
 
     for i in range(0, total, BATCH):
         batch = pending[i : i + BATCH]
@@ -170,23 +219,60 @@ def main():
                 }
                 done += 1
             print(f" ✓ ({done} done)")
+            consecutive_errors = 0
 
-            # Save progress after every batch
-            OUTPUT.write_text(
-                json.dumps(no_data, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-        except Exception as exc:
-            errors += 1
-            print(f" ERROR: {exc}")
-            if errors >= 5:
-                print("Too many consecutive errors – aborting. Re-run to resume.")
-                break
-            time.sleep(5)
+        except requests.HTTPError as exc:
+            consecutive_errors += 1
+            status = exc.response.status_code if exc.response is not None else 0
+            print(f" HTTP {status}")
+            wait = 30 if status == 429 else 10
+            print(f"  → waiting {wait}s before retry...", flush=True)
+            time.sleep(wait)
+            # Re-insert batch at front of remaining work by continuing (not consumed)
             continue
 
-        errors = 0  # reset on success
-        time.sleep(1.0)  # polite rate-limiting
+        except Exception as exc:
+            consecutive_errors += 1
+            print(f" parse error ({exc.__class__.__name__}) – retrying 1-by-1")
+            # Retry each day in the batch individually
+            for item in batch:
+                d = item["date"]
+                if d in no_data:
+                    continue
+                print(f"    {d} ...", end="", flush=True)
+                for attempt in range(3):
+                    try:
+                        result = translate_batch([item], api_key)
+                        if result:
+                            r = result[0]
+                            no_data[d] = {
+                                "olay":       r.get("olay",       ""),
+                                "ayet_hadis": r.get("ayet_hadis", ""),
+                                "konu":       r.get("konu",       ""),
+                                "metin":      r.get("metin",      ""),
+                                "dua":        r.get("dua",        ""),
+                            }
+                            done += 1
+                            print(f" ✓")
+                            consecutive_errors = 0
+                            break
+                    except requests.HTTPError as he:
+                        status = he.response.status_code if he.response is not None else 0
+                        wait = 30 if status == 429 else 10
+                        print(f" HTTP {status}, wait {wait}s", end="", flush=True)
+                        time.sleep(wait)
+                    except Exception as e2:
+                        print(f" ✗ ({e2.__class__.__name__})", end="", flush=True)
+                        time.sleep(3)
+                else:
+                    print(f" SKIPPED after 3 attempts")
+
+        # Save progress after every batch
+        OUTPUT.write_text(
+            json.dumps(no_data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        time.sleep(1.2)  # polite rate-limiting
 
     print(f"\nFinished. {len(no_data)}/{len(tr_data)} days translated → {OUTPUT}")
 
