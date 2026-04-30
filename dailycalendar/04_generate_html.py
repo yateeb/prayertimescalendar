@@ -163,7 +163,7 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
 /* ── Prayer-times section ── */
 .prayer-area {
   display: flex;
-  gap: 1mm;
+  gap: 0;
   flex: 1;          /* fill all remaining height */
   position: relative;
 }
@@ -187,6 +187,11 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
   overflow: hidden;
   position: relative;
   z-index: 1;
+  background: white;   /* solid cover so logo only shows behind table rows */
+}
+.prayer-wrap:first-child {
+  border-right: 0.4mm solid #c0cfe0;
+  padding-right: 0.5mm;
 }
 .pt {
   border-collapse: collapse;
