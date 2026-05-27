@@ -22,6 +22,8 @@ Output:
 
 import base64
 import json
+import re
+from datetime import date as _date
 from html import escape as esc
 from pathlib import Path
 
@@ -30,6 +32,7 @@ LOGO     = HERE.parent / "logo.png"
 PRAYER   = HERE / "data" / "prayer_times_2027.json"
 REM_NO   = HERE / "data" / "reminders_no.json"
 REM_TR   = HERE / "data" / "reminders_tr.json"
+QUOTES   = HERE / "data" / "quotes.json"
 OUTPUT   = HERE / "output" / "kalender-2027-daglig.html"
 
 # Cities in Norwegian alphabetical order (Æ, Ø, Å come after Z)
@@ -159,6 +162,14 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
   color: #333;
   line-height: 1.35;
 }
+.col-olay p.qt { font-style: italic; }
+.col-olay p.qa {
+  font-size: 4.5pt;
+  color: #666;
+  text-align: right;
+  margin-top: 0.6mm;
+  font-style: normal;
+}
 
 /* ── Prayer-times section ── */
 .prayer-area {
@@ -168,15 +179,14 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
   position: relative;
 }
 /* Logo watermark centred behind both tables */
-.prayer-area::before {
-  content: '';
+.prayer-watermark {
   position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: 75mm; height: 75mm;
+  top: 0; left: 0; right: 0; bottom: 0;
+  width: 72mm; height: 72mm;
+  margin: auto;
   background: url("__LOGO_URI__") no-repeat center center;
   background-size: contain;
-  opacity: 0.05;
+  opacity: 0.06;
   pointer-events: none;
   z-index: 2;
 }
@@ -287,33 +297,57 @@ body { font-family: Arial, Helvetica, sans-serif; font-size: 6pt; color: #111; }
 
 /* ────────────────────────── COVER PAGE ───────────────────────────────── */
 .cover {
-  background: #1a3a5c;
+  background: #fff;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4mm;
+  gap: 3mm;
+  border: 1.5mm solid #1a3a5c;
+}
+.cover-stripe {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 14mm;
+  background: #1a3a5c;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+.cover-stripe-bottom {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 8mm;
+  background: #1a3a5c;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
 }
 .cover-logo {
-  width: 48mm;
+  width: 55mm;
   height: auto;
-  filter: brightness(0) invert(1);
-  opacity: 0.95;
+  position: relative;
+  z-index: 1;
+  margin-top: 8mm;
 }
 .cover-title {
-  color: #fff;
+  color: #1a3a5c;
   font-size: 13pt;
   font-weight: 900;
   text-align: center;
   letter-spacing: 0.04em;
   line-height: 1.3;
+  position: relative;
+  z-index: 1;
 }
 .cover-year {
-  color: #a8c8e8;
-  font-size: 8pt;
-  font-weight: 400;
+  color: #2c5f8a;
+  font-size: 9pt;
+  font-weight: 700;
   text-align: center;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
+  position: relative;
+  z-index: 1;
 }
 
 /* ────────────────────────── EMPTY PAGE ───────────────────────────────── */
@@ -425,10 +459,14 @@ def prayer_table(cities: list[str], city_data: dict) -> str:
     )
 
 
-def front_page(date_str: str, meta: dict, rem: dict) -> str:
-    hijri = meta.get("hijri", {})
-    ayet  = rem.get("ayet_hadis", "")
-    olay  = rem.get("olay", "")
+def front_page(date_str: str, meta: dict, rem: dict, quote_entry: dict = None) -> str:
+    if quote_entry is None:
+        quote_entry = {}
+    hijri    = meta.get("hijri", {})
+    ayet     = rem.get("ayet_hadis", "")
+    q_title  = quote_entry.get("title", "Vise ord")
+    q_text   = quote_entry.get("quote", rem.get("olay", ""))
+    q_author = quote_entry.get("author", "")
     cities_data = meta.get("cities", {})
 
     hijri_str = (
@@ -436,6 +474,7 @@ def front_page(date_str: str, meta: dict, rem: dict) -> str:
     )
     doy       = meta.get("day_of_year", "")
     days_left = meta.get("days_left", "")
+    week_num  = _date.fromisoformat(date_str).isocalendar()[1]
 
     header = f"""
 <div class="header">
@@ -448,16 +487,18 @@ def front_page(date_str: str, meta: dict, rem: dict) -> str:
     <div class="date-wd">{esc(meta.get('weekday', ''))}</div>
     <div class="date-mth">{esc(meta.get('month', ''))} {meta.get('year', '')}</div>
     <div class="date-hijri">{esc(hijri_str)}</div>
-    <div class="date-doy">Dag {doy} &nbsp;·&nbsp; {days_left} igjen</div>
+    <div class="date-doy">Uke {week_num} &nbsp;·&nbsp; Dag {doy} &nbsp;·&nbsp; {days_left} igjen</div>
   </div>
   <div class="col-olay">
-    <h4>Historisk</h4>
-    <p>{esc(olay)}</p>
+    <h4>{esc(q_title)}</h4>
+    <p class="qt">{esc(q_text)}</p>
+    {f'<p class="qa">— {esc(q_author)}</p>' if q_author else ''}
   </div>
 </div>"""
 
     prayers = f"""
 <div class="prayer-area">
+  <div class="prayer-watermark"></div>
   <div class="prayer-wrap">{prayer_table(CITY_LEFT,  cities_data)}</div>
   <div class="prayer-wrap">{prayer_table(CITY_RIGHT, cities_data)}</div>
 </div>"""
@@ -475,8 +516,15 @@ def back_page(date_str: str, rem: dict) -> str:
     dua          = rem.get("dua",   "")
     dua_translit = rem.get("dua_translit", "")
 
-    # Convert newlines in metin to <br> tags for display
-    metin_html = "<br>".join(esc(line) for line in metin.splitlines()) if metin else ""
+    def render_line(line: str) -> str:
+        """Escape HTML then convert **bold** and _italic_ markers."""
+        s = esc(line)
+        s = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', s)
+        s = re.sub(r'_(.+?)_', r'<em>\1</em>', s)
+        return s
+
+    # Convert newlines in metin to <br> tags, applying inline formatting
+    metin_html = "<br>".join(render_line(line) for line in metin.splitlines()) if metin else ""
 
     dua_block = ""
     if dua:
@@ -511,6 +559,8 @@ def cover_page(logo_uri: str) -> str:
     )
     return (
         '<div class="page cover">'
+        '<div class="cover-stripe"></div>'
+        '<div class="cover-stripe-bottom"></div>'
         f"{logo_img}"
         '<div class="cover-title">Bønnetidskalender</div>'
         '<div class="cover-year">2027</div>'
@@ -536,15 +586,15 @@ def org_info_page() -> str:
 
         "<h3>Hva gjør vi?</h3>"
         "<ul>"
-        "<li>Holder fredagsbønn og eid-bønn i norske fengsler</li>"
-        "<li>Tilbyr personlige samtaler og sjelesorg i fortrolighet</li>"
-        "<li>Skaffer islamsk litteratur og materiell til innsatte</li>"
         "<li>Jobber for at du skal ha lik tilgang på religiøs veiledning</li>"
+        "<li>Formidler islamsk litteratur og materiell til innsatte</li>"
+        "<li>Tilbyr personlige samtaler og sjelesorg i fortrolighet</li>"
+        "<li>Holder fredagsbønn og eid-bønn i norske fengsler</li>"
         "</ul>"
 
         '<div class="highlight-box">'
-        "Over 50&#160;% av innsatte i Oslo fengsel har muslimsk bakgrunn – likevel "
-        "finnes det ingen imam i fast stilling. Dette er en ubalanse vi kjemper aktivt for å endre."
+        "En stor andel innsatte rundt omkring i Norge har muslimsk bakgrunn – likevel "
+        "har disse ikke tilgang til islamsk veiledning og materiell. Dette vil vi gjøre noe med!"
         "</div>"
 
         "<h3>Vår visjon</h3>"
@@ -552,6 +602,14 @@ def org_info_page() -> str:
         "Mange av oss som jobber i Fengselsimamene har sett med egne øyne hvordan troen "
         "kan gi et menneske ny retning og ny styrke. Det er den forandringen vi ønsker "
         "å være en del av – for deg.</p>"
+
+        "<h3>Hvordan kan du kontakte oss?</h3>"
+        "<p>Vår hovedkanal for kommunikasjon er gjennom fengslelsadministrasjonene, som kan formidle beskjeder og materiell mellom deg og oss. "
+        "Du kan også skrive til oss på følgende adresse:</p>"
+        '<div class="highlight-box">'
+        "<p> Hjemmeside: www.fengselsimamene.no</p>"
+        "<p> Epost: <a href='mailto:fengselsimamene@gmail.com'>fengselsimamene@gmail.com</a></p>"
+        "</div>"
 
         '<div class="web-link">fengselsimamene.no</div>'
         "</div>"
@@ -573,6 +631,7 @@ def calendar_info_page() -> str:
         "<li><b>28 norske fengsler og byer</b> – Fajr, Soloppgang, Zuhr, Asr, Maghrib og Isha</li>"
         "<li>Gregoriansk dato, ukedag og <b>hijri-dato</b> (islamsk kalender)</li>"
         "<li>Et vers fra Koranen eller et hadith øverst på siden</li>"
+        "<li>Vise ord fra inspirerende personligheter gjennom historien</li>"
         "</ul>"
 
         "<h3>Baksiden – daglig refleksjon</h3>"
@@ -630,6 +689,14 @@ def main():
     prayer_data: dict = json.loads(PRAYER.read_text(encoding="utf-8"))
     print(f"Prayer data: {len(prayer_data)} days")
 
+    # Load motivational quotes (from 06_fetch_quotes.py)
+    quotes_data: dict = {}
+    if QUOTES.exists():
+        quotes_data = json.loads(QUOTES.read_text(encoding="utf-8"))
+        print(f"Quotes: {len(quotes_data)} entries")
+    else:
+        print("Note: quotes.json not found – run 06_fetch_quotes.py")
+
     # Load both sources; Norwegian preferred per day, Turkish as fallback
     rem_tr: dict = {}
     rem_no: dict = {}
@@ -652,8 +719,7 @@ def main():
 
     # ── Front matter (6 pages before the calendar) ──
     pages.append(cover_page(logo_uri))       # p1: hard cover
-    pages.append(empty_page())               # p2: back of cover (blank)
-    pages.append(org_info_page())            # p3: about Fengselsimamene
+    pages.append(org_info_page())            # p2: about Fengselsimamene
     pages.append(empty_page())               # p4: back of org page (blank)
     pages.append(calendar_info_page())       # p5: about this calendar
     pages.append(empty_page())               # p6: back of calendar info (blank)
@@ -661,9 +727,10 @@ def main():
     sorted_dates = sorted(prayer_data.keys())
 
     for date_str in sorted_dates:
-        meta = prayer_data[date_str]
-        rem  = get_reminder(date_str)
-        pages.append(front_page(date_str, meta, rem))
+        meta       = prayer_data[date_str]
+        rem        = get_reminder(date_str)
+        quote_entry = quotes_data.get(date_str, {})
+        pages.append(front_page(date_str, meta, rem, quote_entry))
         pages.append(back_page(date_str, rem))
 
     html = build_html(pages, logo_uri=logo_uri)
